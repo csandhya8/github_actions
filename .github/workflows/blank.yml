@@ -1,36 +1,94 @@
-# This is a basic workflow to help you get started with Actions
 
-name: CI
+name: Deploy
 
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+    inputs:
+      env:
+        type: choice
+        description: Target environment
+        required: true
+        options:
+          - dev
+          - qa
+          - prod
+      service:
+        type: choice
+        description: Service to deploy
+        required: true
+        options:
+          - svc-a
+          - svc-b
+          - svc-c
+      version:
+        type: string
+        description: Release/version (e.g., 1.2.3 or git SHA)
+        required: true
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
-  build:
-    # The type of runner that the job will run on
+  validate-inputs:
     runs-on: ubuntu-latest
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
+    outputs:
+      ok: ${{ steps.validate.outputs.ok }}
+      normalized_version: ${{ steps.normalize.outputs.normalized_version }}
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
-
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
-
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
+      - name: Validate ENV/SERVICE compatibility
+        id: validate
+        shell: bash
         run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+          set -euo pipefail
+          env="${{ github.event.inputs.env }}"
+          svc="${{ github.event.inputs.service }}"
+
+          # Allowed mapping:
+          declare -A allowed
+          allowed[dev]="svc-a,svc-b"
+          allowed[qa]="svc-a,svc-c"
+          allowed[prod]="svc-a,svc-b,svc-c"
+
+          if [[ -z "${allowed[$env]:-}" ]]; then
+            echo "::error::Unknown environment '$env'. Allowed: dev, qa, prod"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          IFS=',' read -r -a arr <<< "${allowed[$env]}"
+          ok="false"
+          for x in "${arr[@]}"; do
+            [[ "$x" == "$svc" ]] && ok="true" && break
+          done
+
+          if [[ "$ok" != "true" ]]; then
+            echo "::error::Service '$svc' is not allowed for env '$env'. Allowed for '$env': ${allowed[$env]}"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Normalize version (optional)
+        id: normalize
+        shell: bash
+        run: |
+          set -euo pipefail
+          ver="${{ github.event.inputs.version }}"
+          # Example: strip leading 'v' if provided
+          norm="${ver#v}"
+          echo "normalized_version=$norm" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: [validate-inputs]
+    if: needs.validate-inputs.outputs.ok == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Summary
+        run: |
+          echo "Environment: ${{ github.event.inputs.env }}"
+          echo "Service:     ${{ github.event.inputs.service }}"
+          echo "Version:     ${{ needs.validate-inputs.outputs.normalized_version }}"
+
+      # Your real deploy logic here:
+      # - run: ./scripts/deploy.sh "${{ github.event.inputs.env }}" "${{ github.event.inputs.service }}" "${{ needs.validate-inputs.outputs.normalized_version }}"
