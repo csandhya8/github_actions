@@ -9,17 +9,17 @@ on:
         description: Target environment
         required: true
         options:
-          - dev
-          - qa
-          - prod
+          - CM_CodeDepot
+          - CM_OPT
+          - CM_UHC
       service:
         type: choice
         description: Service to deploy
         required: true
         options:
-          - svc-a
-          - svc-b
-          - svc-c
+          - CMRegressionTestApp
+          - CMOPTAccountTypeCallReason
+          - CMOPTITSS
       version:
         type: string
         description: Release/version (e.g., 1.2.3 or git SHA)
@@ -42,9 +42,9 @@ jobs:
 
           # Allowed mapping:
           declare -A allowed
-          allowed[dev]="svc-a,svc-b"
-          allowed[qa]="svc-a,svc-c"
-          allowed[prod]="svc-a,svc-b,svc-c"
+          allowed[CM_CodeDepot]="CMRegressionTestApp"
+          allowed[CM_OPT]="CMOPTAccountTypeCallReason, CMOPTITSS"
+          allowed[CM_UHC]="svc-a,svc-b,svc-c"
 
           if [[ -z "${allowed[$env]:-}" ]]; then
             echo "::error::Unknown environment '$env'. Allowed: dev, qa, prod"
