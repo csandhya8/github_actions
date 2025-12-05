@@ -4,26 +4,69 @@ name: Deploy
 on:
   workflow_dispatch:
     inputs:
-      env:
+      lob:
         type: choice
-        description: Target environment
+        description: Target lob
         required: true
         options:
           - CM_CodeDepot
           - CM_OPT
           - CM_UHC
-      service:
+      targetlob:
         type: choice
-        description: Service to deploy
+        description: targetlob to deploy
         required: true
         options:
           - CMRegressionTestApp
           - CMOPTAccountTypeCallReason
           - CMOPTITSS
-      version:
-        type: string
-        description: Release/version (e.g., 1.2.3 or git SHA)
+      rule_package_name:
+        type: choice
+        description: rule package name
         required: true
+        options:
+          - cmoptaccounttypecallreason.inbound.rt
+          - cmoptitss.inbound.rt
+          - cmoptrxspecialitycampaignname.inbound.rt
+          - cmoptrxspecialityclientname.inbound.rt
+          - cmoptrxspecialitytherapycode.inbound.rt
+          - cmregressiontestapp.inbound.rt
+          - cmuhccallerintent.inbound.rt
+          - cmuhccrosschannel.inbound.rt
+          - cmuhccseligibility.inbound.rt
+          - cmuhccsrouting.inbound.rt
+          - cmuhcdental.inbound.rt
+          - cmuhceiclaimsdenial.inbound.rt
+          - cmuhceifastpass.inbound.rt
+          - cmuhceiprime.inbound.rt
+          - cmuhceirouting.inbound.rt
+          - cmuhceispecialtyivr.inbound.rt
+          - cmuhcmrproviderrestriction.inbound.rt
+          - cmuhcmrrouting.inbound.rt
+          - cmuhcpacrouting.inbound.rt
+          - cmuhcrepeatcaller.inbound.rt
+          - cmuhcvision.inbound.rt
+          - cmoptaccounttypecallreason.inbound.rt.hotfix
+          - cmoptitss.inbound.rt.hotfix
+          - cmoptrxspecialitycampaignname.inbound.rt.hotfix
+          - cmoptrxspecialityclientname.inbound.rt.hotfix
+          - cmoptrxspecialitytherapycode.inbound.rt.hotfix
+          - cmregressiontestapp.inbound.rt.hotfix
+          - cmuhccallerintent.inbound.rt.hotfix
+          - cmuhccrosschannel.inbound.rt.hotfix
+          - cmuhccseligibility.inbound.rt.hotfix
+          - cmuhccsrouting.inbound.rt.hotfix
+          - cmuhcdental.inbound.rt.hotfix
+          - cmuhceiclaimsdenial.inbound.rt.hotfix
+          - cmuhceifastpass.inbound.rt.hotfix
+          - cmuhceiprime.inbound.rt.hotfix
+          - cmuhceirouting.inbound.rt.hotfix
+          - cmuhceispecialtyivr.inbound.rt.hotfix
+          - cmuhcmrproviderrestriction.inbound.rt.hotfix
+          - cmuhcmrrouting.inbound.rt.hotfix
+          - cmuhcpacrouting.inbound.rt.hotfix
+          - cmuhcrepeatcaller.inbound.rt.hotfix
+          - cmuhcvision.inbound.rt.hotfix
 
 jobs:
   validate-inputs:
@@ -32,34 +75,34 @@ jobs:
       ok: ${{ steps.validate.outputs.ok }}
       normalized_version: ${{ steps.normalize.outputs.normalized_version }}
     steps:
-      - name: Validate ENV/SERVICE compatibility
+      - name: Validate lob/targetlob compatibility
         id: validate
         shell: bash
         run: |
           set -euo pipefail
-          env="${{ github.event.inputs.env }}"
-          svc="${{ github.event.inputs.service }}"
+          lob="${{ github.event.inputs.lob }}"
+          svc="${{ github.event.inputs.targetlob }}"
 
           # Allowed mapping:
           declare -A allowed
           allowed[CM_CodeDepot]="CMRegressionTestApp"
-          allowed[CM_OPT]="CMOPTAccountTypeCallReason, CMOPTITSS"
-          allowed[CM_UHC]="svc-a,svc-b,svc-c"
+          allowed[CM_OPT]="CMOPTAccountTypeCallReason,CMOPTITSS,CMOPTRxSpecialityCampaignName,CMOPTRxSpecialityClientName,CMOPTRxSpecialityTherapyCode"
+          allowed[CM_UHC]="CMUHCCSEligibility,CMUHCCSRouting,CMUHCCallerIntent,CMUHCCrossChannel,CMUHCDental,CMUHCEIClaimsDenial,CMUHCEIFastPass,CMUHCEIPrime,CMUHCEIRouting,CMUHCEISpecialtyIVR,CMUHCMRProviderRestriction,CMUHCMRRouting,CMUHCPACRouting,CMUHCRepeatCaller,CMUHCVision"
 
-          if [[ -z "${allowed[$env]:-}" ]]; then
-            echo "::error::Unknown environment '$env'. Allowed: dev, qa, prod"
+          if [[ -z "${allowed[$lob]:-}" ]]; then
+            echo "::error::Unknown lob '$lob' "
             echo "ok=false" >> "$GITHUB_OUTPUT"
             exit 1
           fi
 
-          IFS=',' read -r -a arr <<< "${allowed[$env]}"
+          IFS=',' read -r -a arr <<< "${allowed[$lob]}"
           ok="false"
           for x in "${arr[@]}"; do
             [[ "$x" == "$svc" ]] && ok="true" && break
           done
 
           if [[ "$ok" != "true" ]]; then
-            echo "::error::Service '$svc' is not allowed for env '$env'. Allowed for '$env': ${allowed[$env]}"
+            echo "::error::targetlob '$svc' is not allowed for lob '$lob'. Allowed for '$lob': ${allowed[$lob]}"
             echo "ok=false" >> "$GITHUB_OUTPUT"
             exit 1
           fi
@@ -86,9 +129,9 @@ jobs:
 
       - name: Summary
         run: |
-          echo "Environment: ${{ github.event.inputs.env }}"
-          echo "Service:     ${{ github.event.inputs.service }}"
+          echo "lob: ${{ github.event.inputs.lob }}"
+          echo "targetlob:     ${{ github.event.inputs.targetlob }}"
           echo "Version:     ${{ needs.validate-inputs.outputs.normalized_version }}"
 
       # Your real deploy logic here:
-      # - run: ./scripts/deploy.sh "${{ github.event.inputs.env }}" "${{ github.event.inputs.service }}" "${{ needs.validate-inputs.outputs.normalized_version }}"
+      # - run: ./scripts/deploy.sh "${{ github.event.inputs.lob }}" "${{ github.event.inputs.targetlob }}" "${{ needs.validate-inputs.outputs.normalized_version }}"
