@@ -1,0 +1,117 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      lob:
+        type: choice
+        description: Target lob
+        required: true
+        options:
+          - CM_CodeDepot
+          - CM_OPT
+          - CM_UHC
+      targetlob:
+        type: choice
+        description: targetlob to deploy
+        required: true
+        options:
+          - CMRegressionTestApp
+          - CMOPTAccountTypeCallReason
+          - CMOPTITSS
+      rule_package_name:
+        type: choice
+        description: rule package name
+        required: true
+        options:
+          - cmoptaccounttypecallreason.inbound.rt
+          - cmoptitss.inbound.rt
+          - cmoptrxspecialitycampaignname.inbound.rt
+          - cmoptrxspecialityclientname.inbound.rt
+          - cmoptrxspecialitytherapycode.inbound.rt
+          - cmregressiontestapp.inbound.rt
+          - cmuhccallerintent.inbound.rt
+          - cmuhccrosschannel.inbound.rt
+          - cmuhccseligibility.inbound.rt
+          - cmuhccsrouting.inbound.rt
+          - cmuhcdental.inbound.rt
+          - cmuhceiclaimsdenial.inbound.rt
+          - cmuhceifastpass.inbound.rt
+          - cmuhceiprime.inbound.rt
+          - cmuhceirouting.inbound.rt
+          - cmuhceispecialtyivr.inbound.rt
+          - cmuhcmrproviderrestriction.inbound.rt
+          - cmuhcmrrouting.inbound.rt
+          - cmuhcpacrouting.inbound.rt
+          - cmuhcrepeatcaller.inbound.rt
+          - cmuhcvision.inbound.rt
+          - cmoptaccounttypecallreason.inbound.rt.hotfix
+          - cmoptitss.inbound.rt.hotfix
+          - cmoptrxspecialitycampaignname.inbound.rt.hotfix
+          - cmoptrxspecialityclientname.inbound.rt.hotfix
+          - cmoptrxspecialitytherapycode.inbound.rt.hotfix
+          - cmregressiontestapp.inbound.rt.hotfix
+          - cmuhccallerintent.inbound.rt.hotfix
+          - cmuhccrosschannel.inbound.rt.hotfix
+          - cmuhccseligibility.inbound.rt.hotfix
+          - cmuhccsrouting.inbound.rt.hotfix
+          - cmuhcdental.inbound.rt.hotfix
+          - cmuhceiclaimsdenial.inbound.rt.hotfix
+          - cmuhceifastpass.inbound.rt.hotfix
+          - cmuhceiprime.inbound.rt.hotfix
+          - cmuhceirouting.inbound.rt.hotfix
+          - cmuhceispecialtyivr.inbound.rt.hotfix
+          - cmuhcmrproviderrestriction.inbound.rt.hotfix
+          - cmuhcmrrouting.inbound.rt.hotfix
+          - cmuhcpacrouting.inbound.rt.hotfix
+          - cmuhcrepeatcaller.inbound.rt.hotfix
+          - cmuhcvision.inbound.rt.hotfix
+
+jobs:
+  validate-inputs:
+    runs-on: ubuntu-latest
+    outputs:
+      ok: ${{ steps.validate.outputs.ok }}
+      normalized_version: ${{ steps.normalize.outputs.normalized_version }}
+    steps:
+      - name: Validate lob/targetlob compatibility
+        id: validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          lob="${{ github.event.inputs.lob }}"
+          svc="${{ github.event.inputs.targetlob }}"
+          # Allowed mapping:
+          declare -A allowed
+          allowed[CM_CodeDepot]="CMRegressionTestApp"
+          allowed[CM_OPT]="CMOPTAccountTypeCallReason,CMOPTITSS,CMOPTRxSpecialityCampaignName,CMOPTRxSpecialityClientName,CMOPTRxSpecialityTherapyCode"
+          allowed[CM_UHC]="CMUHCCSEligibility,CMUHCCSRouting,CMUHCCallerIntent,CMUHCCrossChannel,CMUHCDental,CMUHCEIClaimsDenial,CMUHCEIFastPass,CMUHCEIPrime,CMUHCEIRouting,CMUHCEISpecialtyIVR,CMUHCMRProviderRestriction,CMUHCMRRouting,CMUHCPACRouting,CMUHCRepeatCaller,CMUHCVision"
+          if [[ -z "${allowed[$lob]:-}" ]]; then
+            echo "::error::Unknown lob '$lob' "
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          IFS=',' read -r -a arr <<< "${allowed[$lob]}"
+          ok="false"
+          for x in "${arr[@]}"; do
+            [[ "$x" == "$svc" ]] && ok="true" && break
+          done
+          if [[ "$ok" != "true" ]]; then
+            echo "::error::targetlob '$svc' is not allowed for lob '$lob'. Allowed for '$lob': ${allowed[$lob]}"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+  deploy:
+    needs: [validate-inputs]
+    if: needs.validate-inputs.outputs.ok == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Summary
+        run: |
+          echo "lob: ${{ github.event.inputs.lob }}"
+          echo "targetlob:     ${{ github.event.inputs.targetlob }}"
+          echo "rule_package_name:     ${{ github.event.inputs.rule_package_name }}"
