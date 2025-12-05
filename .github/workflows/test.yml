@@ -1,28 +1,23 @@
 
-name: Deploy
-
-on:
-  workflow_dispatch:
-    inputs:
-      lob:
-        type: choice
-        description: Target lob
+name: Deployname description: Target LOB
         required: true
         options:
           - CM_CodeDepot
           - CM_OPT
           - CM_UHC
+
       targetlob:
         type: choice
-        description: targetlob to deploy
+        description: Target LOB to deploy
         required: true
         options:
           - CMRegressionTestApp
           - CMOPTAccountTypeCallReason
           - CMOPTITSS
+
       rule_package_name:
         type: choice
-        description: rule package name
+        description: Rule package name
         required: true
         options:
           - cmoptaccounttypecallreason.inbound.rt
@@ -82,27 +77,33 @@ jobs:
           set -euo pipefail
           lob="${{ github.event.inputs.lob }}"
           svc="${{ github.event.inputs.targetlob }}"
+
           # Allowed mapping:
           declare -A allowed
           allowed[CM_CodeDepot]="CMRegressionTestApp"
           allowed[CM_OPT]="CMOPTAccountTypeCallReason,CMOPTITSS,CMOPTRxSpecialityCampaignName,CMOPTRxSpecialityClientName,CMOPTRxSpecialityTherapyCode"
           allowed[CM_UHC]="CMUHCCSEligibility,CMUHCCSRouting,CMUHCCallerIntent,CMUHCCrossChannel,CMUHCDental,CMUHCEIClaimsDenial,CMUHCEIFastPass,CMUHCEIPrime,CMUHCEIRouting,CMUHCEISpecialtyIVR,CMUHCMRProviderRestriction,CMUHCMRRouting,CMUHCPACRouting,CMUHCRepeatCaller,CMUHCVision"
+
           if [[ -z "${allowed[$lob]:-}" ]]; then
-            echo "::error::Unknown lob '$lob' "
+            echo "::error::Unknown lob '$lob'"
             echo "ok=false" >> "$GITHUB_OUTPUT"
             exit 1
           fi
+
           IFS=',' read -r -a arr <<< "${allowed[$lob]}"
           ok="false"
           for x in "${arr[@]}"; do
             [[ "$x" == "$svc" ]] && ok="true" && break
           done
+
           if [[ "$ok" != "true" ]]; then
             echo "::error::targetlob '$svc' is not allowed for lob '$lob'. Allowed for '$lob': ${allowed[$lob]}"
             echo "ok=false" >> "$GITHUB_OUTPUT"
             exit 1
           fi
+
           echo "ok=true" >> "$GITHUB_OUTPUT"
+
   deploy:
     needs: [validate-inputs]
     if: needs.validate-inputs.outputs.ok == 'true'
@@ -114,28 +115,21 @@ jobs:
       - name: Summary
         run: |
           echo "lob: ${{ github.event.inputs.lob }}"
-          echo "targetlob:     ${{ github.event.inputs.targetlob }}"
-          echo "rule_package_name:     ${{ github.event.inputs.rule_package_name }}"
-      # get release:
-      # - run: ./scripts/deploy.sh "${{ github.event.inputs.lob }}" "${{ github.event.inputs.targetlob }}" "${{ needs.validate-inputs.outputs.normalized_version }}"
+          echo "targetlob: ${{ github.event.inputs.targetlob }}"
+          echo "rule_package_name: ${{ github.event.inputs.rule_package_name }}"
 
       - name: Fetch releases from Artifactory
         id: fetch
         env:
-          #KEY: ${{ inputs.key }}
           RULE_PACKAGE_NAME: ${{ inputs.rule_package_name }}
           TARGET_LOB: ${{ inputs.target_lob }}
-          #RULES_JFROG_CONFIG_JSON: ${{ secrets.RULES_JFROG_CONFIG_JSON }}
           ARTIFACTORY_URL: https://trial7091u2.jfrog.io/artifactory/test/demos/19939878363/demo.zip
-          #ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
         run: |
           set -euo pipefail
-
-          # ---- Derive rule type & normalized underscore package name ----
+          # Derive rule type & normalized underscore package name
           underscorePackageName="${RULE_PACKAGE_NAME//./_}"
           if [[ "${RULE_PACKAGE_NAME}" == *.hotfix ]]; then
             rulPackageType="HotFix"
-            # Jenkins script trims trailing _hotfix for path derivation
             underscorePackageName="${underscorePackageName%_hotfix}"
           elif [[ "${RULE_PACKAGE_NAME}" == *.rt ]]; then
             rulPackageType="Normal"
@@ -144,32 +138,33 @@ jobs:
             exit 2
           fi
 
-		# ---- Call Artifactory with JFrog Access Token (Bearer) ----
-		if [[ -z "${JFROG_ACCESS_TOKEN:-}" ]]; then
-		  echo "ERROR: Missing JFROG_ACCESS_TOKEN secret" >&2
-		  exit 3
-		fi
+          # Validate JFrog token
+          if [[ -z "${JFROG_ACCESS_TOKEN:-}" ]]; then
+            echo "ERROR: Missing JFROG_ACCESS_TOKEN secret" >&2
+            exit 3
+          fi
 
-		http_code=$(curl -sS \
-		  -H "Authorization: Bearer ${JFROG_ACCESS_TOKEN}" \
-		  -o response.json \
-		  -w "%{http_code}" \
-		  "${artifactoryURL}")
+          # Fetch from Artifactory
+          http_code=$(curl -sS \
+            -H "Authorization: Bearer ${JFROG_ACCESS_TOKEN}" \
+            -o response.json \
+            -w "%{http_code}" \
+            "${artifactoryURL}")
 
-		if [[ "${http_code}" -lt 200 || "${http_code}" -ge 300 ]]; then
-		  echo "ERROR: Artifactory request failed with HTTP ${http_code}" >&2
-		  cat response.json >&2 || true
-		  exit 4
-		fi
+          if [[ "${http_code}" -lt 200 || "${http_code}" -ge 300 ]]; then
+            echo "ERROR: Artifactory request failed with HTTP ${http_code}" >&2
+            cat response.json >&2
+            exit 4
+          fi
 
-
-          # ---- Parse response: expect JSON with `files` array of paths ----
+          # Parse response
           mapfile -t all_paths < <(jq -r '.files[]?' response.json)
           declare -a non_hotfix=()
           declare -a hotfix=()
+
           for p in "${all_paths[@]}"; do
-            fname="${p##*/}"            # last path segment
-            base="${fname%.zip}"        # strip .zip
+            fname="${p##*/}"
+            base="${fname%.zip}"
             if [[ "${rulPackageType}" == "Normal" ]]; then
               [[ "${base}" == *"_hotfix"* ]] && continue
               non_hotfix+=("${base}")
@@ -179,29 +174,29 @@ jobs:
             fi
           done
 
-          # ---- Natural sort & limits (20 normal, 10 hotfix) ----
-          sort_desc_take () {
+          # Sort and limit
+          sort_desc_take() {
             local n="$1"; shift
             if [[ "$#" -eq 0 ]]; then return 0; fi
             printf '%s\n' "$@" | sort -V | tac | head -n "${n}"
           }
+
           latest_non_hotfix="$(sort_desc_take 20 "${non_hotfix[@]:-}")"
           latest_hotfix="$(sort_desc_take 10 "${hotfix[@]:-}")"
-
           combined="$(printf '%s\n%s\n' "${latest_non_hotfix}" "${latest_hotfix}" | awk 'NF')"
-          release_list="$(printf '%s\n' "${combined}" | paste -sd ',' -)"
+          release_list="$(printf '%s\n' "${combined}" | paste -sd ',')"
 
-          # ---- Build HTML similar to Jenkins ----
+          # Build HTML
           select_html=$(cat <<'HTML'
-          <html><head><style>
-          #customers2 {font-family: 'Trebuchet MS', Arial, Helvetica, sans-serif;border-collapse: collapse;width: 100%;}
-          #customers2 caption {display: table-caption;text-align: center;color: BLACK;}
-          #customers2 td, #customers2 th {border: 1px solid #ddd;padding: 8px;}
-          #customers2 th {padding-top: 12px;padding-bottom: 12px;text-align: left;background-color: #ffffe0;color: black;}
-          </style></head><body><p>
-          <table id='customers2'><tr><th>Item</th><th>[User Input 3 - Mandatory]</th></tr>
-          HTML
-          )
+<html><head><style>
+#customers2 {font-family: 'Trebuchet MS', Arial, Helvetica, sans-serif;border-collapse: collapse;width: 100%;}
+#customers2 caption {display: table-caption;text-align: center;color: BLACK;}
+#customers2 td, #customers2 th {border: 1px solid #ddd;padding: 8px;}
+#customers2 th {padding-top: 12px;padding-bottom: 12px;text-align: left;background-color: #ffffe0;color: black;}
+</style></head><body><p>
+<table id='customers2'><tr><th>Item</th><th>[User Input 3 - Mandatory]</th></tr>
+HTML
+)
           select_html+=$(printf "<tr><td>Select Rule Release Name for <b>[%s]</b> Deployment</td>" "${keyEnv}")
           select_html+="<td><select name='value'><option value='NA'>=======Select Release Name=======</option>"
           while IFS= read -r name; do
@@ -212,12 +207,12 @@ jobs:
           rule_release_found="NO"
           [[ -n "${combined}" ]] && rule_release_found="YES"
 
-          # ---- Expose outputs for downstream jobs/steps ----
+          # Outputs
           echo "release_list=${release_list}" >> "$GITHUB_OUTPUT"
           printf "select_html<<EOF\n%s\nEOF\n" "${select_html}" >> "$GITHUB_OUTPUT"
           echo "rule_release_found=${rule_release_found}" >> "$GITHUB_OUTPUT"
 
-          # ---- Add a readable summary ----
+          # Summary
           {
             echo "### Rule releases for \`${RULE_PACKAGE_NAME}\` in \`${keyEnv}\`"
             echo
@@ -233,6 +228,8 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-          EOF
-          echo "Wrote select.html"
-		
+on:
+  workflow_dispatch:
+    inputs:
+      lob:
+        type: choice
