@@ -233,17 +233,6 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-  consume:
-    needs: fetch
-    runs-on: ubuntu-latest
-    steps:
-      - name: Use outputs (example)
-        run: |
-          echo "Release list: ${{ needs.fetch.outputs.release_list }}"
-          echo "Rule release found: ${{ needs.fetch.outputs.rule_release_found }}"
-          # If needed, write the HTML to a file/artifact:
-          cat > select.html <<'EOF'
-          ${{ needs.fetch.outputs.select_html }}
           EOF
           echo "Wrote select.html"
 		
