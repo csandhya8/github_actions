@@ -1,3 +1,4 @@
+
 name: Deploy
 
 on:
@@ -115,3 +116,134 @@ jobs:
           echo "lob: ${{ github.event.inputs.lob }}"
           echo "targetlob:     ${{ github.event.inputs.targetlob }}"
           echo "rule_package_name:     ${{ github.event.inputs.rule_package_name }}"
+      # get release:
+      # - run: ./scripts/deploy.sh "${{ github.event.inputs.lob }}" "${{ github.event.inputs.targetlob }}" "${{ needs.validate-inputs.outputs.normalized_version }}"
+
+      - name: Fetch releases from Artifactory
+        id: fetch
+        env:
+          #KEY: ${{ inputs.key }}
+          RULE_PACKAGE_NAME: ${{ inputs.rule_package_name }}
+          TARGET_LOB: ${{ inputs.target_lob }}
+          #RULES_JFROG_CONFIG_JSON: ${{ secrets.RULES_JFROG_CONFIG_JSON }}
+          ARTIFACTORY_URL: https://trial7091u2.jfrog.io/artifactory/test/demos/19939878363/demo.zip
+          #ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
+       run: |
+          set -euo pipefail
+
+          # ---- Derive rule type & normalized underscore package name ----
+          underscorePackageName="${RULE_PACKAGE_NAME//./_}"
+          if [[ "${RULE_PACKAGE_NAME}" == *.hotfix ]]; then
+            rulPackageType="HotFix"
+            # Jenkins script trims trailing _hotfix for path derivation
+            underscorePackageName="${underscorePackageName%_hotfix}"
+          elif [[ "${RULE_PACKAGE_NAME}" == *.rt ]]; then
+            rulPackageType="Normal"
+          else
+            echo "ERROR: RULE_PACKAGE_NAME must end with .rt or .hotfix" >&2
+            exit 2
+          fi
+
+		# ---- Call Artifactory with JFrog Access Token (Bearer) ----
+		if [[ -z "${JFROG_ACCESS_TOKEN:-}" ]]; then
+		  echo "ERROR: Missing JFROG_ACCESS_TOKEN secret" >&2
+		  exit 3
+		fi
+
+		http_code=$(curl -sS \
+		  -H "Authorization: Bearer ${JFROG_ACCESS_TOKEN}" \
+		  -o response.json \
+		  -w "%{http_code}" \
+		  "${artifactoryURL}")
+
+		if [[ "${http_code}" -lt 200 || "${http_code}" -ge 300 ]]; then
+		  echo "ERROR: Artifactory request failed with HTTP ${http_code}" >&2
+		  cat response.json >&2 || true
+		  exit 4
+		fi
+
+
+          # ---- Parse response: expect JSON with `files` array of paths ----
+          mapfile -t all_paths < <(jq -r '.files[]?' response.json)
+          declare -a non_hotfix=()
+          declare -a hotfix=()
+          for p in "${all_paths[@]}"; do
+            fname="${p##*/}"            # last path segment
+            base="${fname%.zip}"        # strip .zip
+            if [[ "${rulPackageType}" == "Normal" ]]; then
+              [[ "${base}" == *"_hotfix"* ]] && continue
+              non_hotfix+=("${base}")
+            else
+              [[ "${base}" == *"_hotfix"* ]] || continue
+              hotfix+=("${base}")
+            fi
+          done
+
+          # ---- Natural sort & limits (20 normal, 10 hotfix) ----
+          sort_desc_take () {
+            local n="$1"; shift
+            if [[ "$#" -eq 0 ]]; then return 0; fi
+            printf '%s\n' "$@" | sort -V | tac | head -n "${n}"
+          }
+          latest_non_hotfix="$(sort_desc_take 20 "${non_hotfix[@]:-}")"
+          latest_hotfix="$(sort_desc_take 10 "${hotfix[@]:-}")"
+
+          combined="$(printf '%s\n%s\n' "${latest_non_hotfix}" "${latest_hotfix}" | awk 'NF')"
+          release_list="$(printf '%s\n' "${combined}" | paste -sd ',' -)"
+
+          # ---- Build HTML similar to Jenkins ----
+          select_html=$(cat <<'HTML'
+          <html><head><style>
+          #customers2 {font-family: 'Trebuchet MS', Arial, Helvetica, sans-serif;border-collapse: collapse;width: 100%;}
+          #customers2 caption {display: table-caption;text-align: center;color: BLACK;}
+          #customers2 td, #customers2 th {border: 1px solid #ddd;padding: 8px;}
+          #customers2 th {padding-top: 12px;padding-bottom: 12px;text-align: left;background-color: #ffffe0;color: black;}
+          </style></head><body><p>
+          <table id='customers2'><tr><th>Item</th><th>[User Input 3 - Mandatory]</th></tr>
+          HTML
+          )
+          select_html+=$(printf "<tr><td>Select Rule Release Name for <b>[%s]</b> Deployment</td>" "${keyEnv}")
+          select_html+="<td><select name='value'><option value='NA'>=======Select Release Name=======</option>"
+          while IFS= read -r name; do
+            select_html+=$(printf "<option value='%s'>%s</option>" "${name}" "${name}")
+          done <<< "${combined}"
+          select_html+="</select></td></tr></table></body><p></html>"
+
+          rule_release_found="NO"
+          [[ -n "${combined}" ]] && rule_release_found="YES"
+
+          # ---- Expose outputs for downstream jobs/steps ----
+          echo "release_list=${release_list}" >> "$GITHUB_OUTPUT"
+          printf "select_html<<EOF\n%s\nEOF\n" "${select_html}" >> "$GITHUB_OUTPUT"
+          echo "rule_release_found=${rule_release_found}" >> "$GITHUB_OUTPUT"
+
+          # ---- Add a readable summary ----
+          {
+            echo "### Rule releases for \`${RULE_PACKAGE_NAME}\` in \`${keyEnv}\`"
+            echo
+            echo "**Found:** ${rule_release_found}"
+            echo
+            echo "**List:**"
+            if [[ -n "${release_list}" ]]; then
+              echo
+              printf '%s\n' "${combined}" | sed 's/^/- /'
+            else
+              echo
+              echo "_No matching releases found._"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  consume:
+    needs: fetch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Use outputs (example)
+        run: |
+          echo "Release list: ${{ needs.fetch.outputs.release_list }}"
+          echo "Rule release found: ${{ needs.fetch.outputs.rule_release_found }}"
+          # If needed, write the HTML to a file/artifact:
+          cat > select.html <<'EOF'
+          ${{ needs.fetch.outputs.select_html }}
+          EOF
+          echo "Wrote select.html"
+		
