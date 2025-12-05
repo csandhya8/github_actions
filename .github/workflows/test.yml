@@ -128,7 +128,7 @@ jobs:
           #RULES_JFROG_CONFIG_JSON: ${{ secrets.RULES_JFROG_CONFIG_JSON }}
           ARTIFACTORY_URL: https://trial7091u2.jfrog.io/artifactory/test/demos/19939878363/demo.zip
           #ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
-       run: |
+        run: |
           set -euo pipefail
 
           # ---- Derive rule type & normalized underscore package name ----
