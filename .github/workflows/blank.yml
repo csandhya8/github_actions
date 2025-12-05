@@ -109,16 +109,6 @@ jobs:
 
           echo "ok=true" >> "$GITHUB_OUTPUT"
 
-      - name: Normalize version (optional)
-        id: normalize
-        shell: bash
-        run: |
-          set -euo pipefail
-          ver="${{ github.event.inputs.version }}"
-          # Example: strip leading 'v' if provided
-          norm="${ver#v}"
-          echo "normalized_version=$norm" >> "$GITHUB_OUTPUT"
-
   deploy:
     needs: [validate-inputs]
     if: needs.validate-inputs.outputs.ok == 'true'
@@ -131,7 +121,7 @@ jobs:
         run: |
           echo "lob: ${{ github.event.inputs.lob }}"
           echo "targetlob:     ${{ github.event.inputs.targetlob }}"
-          echo "Version:     ${{ needs.validate-inputs.outputs.normalized_version }}"
+          echo "rule_package_name:     ${{ github.event.inputs.rule_package_name }}"
 
-      # Your real deploy logic here:
+      # get release:
       # - run: ./scripts/deploy.sh "${{ github.event.inputs.lob }}" "${{ github.event.inputs.targetlob }}" "${{ needs.validate-inputs.outputs.normalized_version }}"
