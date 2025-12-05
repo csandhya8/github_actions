@@ -1,5 +1,11 @@
+name: Deploy
 
-name: Deployname description: Target LOB
+on:
+  workflow_dispatch:
+    inputs:
+      lob:
+        type: choice
+        description: Target lob
         required: true
         options:
           - CM_CodeDepot
