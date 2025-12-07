@@ -190,9 +190,7 @@ jobs:
           combined="$(printf '%s\n%s\n' "${latest_non_hotfix}" "${latest_hotfix}" | awk 'NF')"
           release_list="$(printf '%s\n' "${combined}" | paste -sd ',')"
 
-
-          fi
-                    # Build HTML
+          # Build HTML
           select_html=$(cat <<'HTML'
 <html><head><style>
 #customers2 {font-family: 'Trebuchet MS', Arial, Helvetica, sans-serif;border-collapse: collapse;width: 100%;}
@@ -233,3 +231,7 @@ HTML
               echo "_No matching releases found._"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+
+          fi
+              
