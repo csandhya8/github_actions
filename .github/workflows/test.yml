@@ -132,62 +132,106 @@ jobs:
           ARTIFACTORY_URL: https://trial7091u2.jfrog.io/artifactory/test/demos/19939878363/demo.zip
         run: |
           set -euo pipefail
-          # Derive rule type & normalized underscore package name
-          underscorePackageName="${RULE_PACKAGE_NAME//./_}"
-          if [[ "${RULE_PACKAGE_NAME}" == *.hotfix ]]; then
-            rulPackageType="HotFix"
-            underscorePackageName="${underscorePackageName%_hotfix}"
-          elif [[ "${RULE_PACKAGE_NAME}" == *.rt ]]; then
-            rulPackageType="Normal"
-          else
-            echo "ERROR: RULE_PACKAGE_NAME must end with .rt or .hotfix" >&2
-            exit 2
+          # ---- Derive rule type & normalized underscore package name ----
+underscorePackageName="${RULE_PACKAGE_NAME//./_}"
+rulePackageType=""
+if [[ "${RULE_PACKAGE_NAME}" == *.hotfix ]]; then
+  rulePackageType="HotFix"
+  # Trim trailing _hotfix for path derivation if needed
+  underscorePackageName="${underscorePackageName%_hotfix}"
+elif [[ "${RULE_PACKAGE_NAME}" == *.rt ]]; then
+  rulePackageType="Normal"
+else
+  echo "ERROR: RULE_PACKAGE_NAME must end with .rt or .hotfix" >&2
+  exit 2
+fi
 
-          # Validate JFrog token
-          if [[ -z "${JFROG_ACCESS_TOKEN:-}" ]]; then
-            echo "ERROR: Missing JFROG_ACCESS_TOKEN secret" >&2
-            exit 3
-          fi
-                   # Fetch from Artifactory
-          http_code=$(curl -sS \
-            -H "Authorization: Bearer ${JFROG_ACCESS_TOKEN}" \
-            -o response.json \
-            -w "%{http_code}" \
-            "${artifactoryURL}")
+# ---- Call Artifactory with JFrog Access Token (Bearer) ----
+if [[ -z "${JFROG_ACCESS_TOKEN:-}" ]]; then
+  echo "ERROR: Missing JFROG_ACCESS_TOKEN secret" >&2
+  exit 3
+fi
 
-          if [[ "${http_code}" -lt 200 || "${http_code}" -ge 300 ]]; then
-            echo "ERROR: Artifactory request failed with HTTP ${http_code}" >&2
-            cat response.json >&2
-            exit 4
-          fi
+# Save response and HTTP code
+http_code=$(curl -sS -L \
+  -H "Authorization: Bearer ${JFROG_ACCESS_TOKEN}" \
+  -o response.json \
+  -w "%{http_code}" \
+  "${artifactoryURL}")
 
-          # Parse response
-          mapfile -t all_paths < <(jq -r '.files[]?' response.json)
-          declare -a non_hotfix=()
-          declare -a hotfix=()
+# Check HTTP status
+if [[ "${http_code}" -lt 200 || "${http_code}" -ge 300 ]]; then
+  echo "ERROR: Artifactory request failed with HTTP ${http_code}" >&2
+  echo "Response body:" >&2
+  cat response.json >&2 || true
+  exit 4
+fi
 
-          for p in "${all_paths[@]}"; do
-            fname="${p##*/}"
-            base="${fname%.zip}"
-            if [[ "${rulPackageType}" == "Normal" ]]; then
-              [[ "${base}" == *"_hotfix"* ]] && continue
-              non_hotfix+=("${base}")
-            else
-              [[ "${base}" == *"_hotfix"* ]] || continue
-              hotfix+=("${base}")
-            fi
-          done
+# ---- Parse response: expect JSON with `files` array of paths ----
+# Example expected shape:
+# {
+#   "files": [
+#     "some/path/package_1.2.3.zip",
+#     "some/path/package_1.2.4_hotfix.zip"
+#   ]
+# }
+mapfile -t all_paths < <(jq -r '.files[]?' response.json)
 
-          # Sort and limit
-          sort_desc_take() {
-            local n="$1"; shift
-            if [[ "$#" -eq 0 ]]; then return 0; fi
-            printf '%s\n' "$@" | sort -V | tac | head -n "${n}"
-          }
+declare -a non_hotfix=()
+declare -a hotfix=()
 
-          latest_non_hotfix="$(sort_desc_take 20 "${non_hotfix[@]:-}")"
-          latest_hotfix="$(sort_desc_take 10 "${hotfix[@]:-}")"
-          combined="$(printf '%s\n%s\n' "${latest_non_hotfix}" "${latest_hotfix}" | awk 'NF')"
-          release_list="$(printf '%s\n' "${combined}" | paste -sd ',')"
+for p in "${all_paths[@]}"; do
+  fname="${p##*/}"        # last path segment
+  base="${fname%.zip}"    # strip .zip
+  if [[ "${rulePackageType}" == "Normal" ]]; then
+    [[ "${base}" == *"_hotfix"* ]] && continue
+    non_hotfix+=("${base}")
+  else
+    [[ "${base}" == *"_hotfix"* ]] || continue
+    hotfix+=("${base}")
+  fi
+done
 
-         
+# ---- Natural sort & limits (20 normal, 10 hotfix) ----
+sort_desc_take () {
+  local n="$1"; shift
+  if [[ "$#" -eq 0 ]]; then return 0; fi
+  # sort -V sorts natural version strings, tac reverses for descending
+  printf '%s\n' "$@" | sort -V | tac | head -n "${n}"
+}
+
+latest_non_hotfix="$(sort_desc_take 20 "${non_hotfix[@]:-}")"
+latest_hotfix="$(sort_desc_take 10 "${hotfix[@]:-}")"
+
+# Combine non-hotfix + hotfix results; remove empty lines
+combined="$(printf '%s\n%s\n' "${latest_non_hotfix}" "${latest_hotfix}" | awk 'NF')"
+release_list="$(printf '%s\n' "${combined}" | paste -sd ',' -)"
+
+rule_release_found="NO"
+[[ -n "${combined}" ]] && rule_release_found="YES"
+
+# ---- Plain echo outputs (no HTML) ----
+echo "------------------------------------------------------------"
+echo "Rule releases for RULE_PACKAGE_NAME='${RULE_PACKAGE_NAME}'"
+[[ -n "${keyEnv:-}" ]] && echo "Environment: ${keyEnv}"
+echo "Rule package type: ${rulePackageType}"
+echo "HTTP status from Artifactory: ${http_code}"
+echo "------------------------------------------------------------"
+echo "rule_release_found=${rule_release_found}"
+echo "release_list=${release_list}"
+echo "------------------------------------------------------------"
+if [[ -n "${release_list}" ]]; then
+  echo "Releases (one per line):"
+  printf '%s\n' "${combined}"
+else
+  echo "No matching releases found."
+fi
+echo "------------------------------------------------------------"
+
+# ---- Optionally expose outputs for downstream GitHub Actions steps ----
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+  {
+    echo "release_list=${release_list}"
+    echo "rule_release_found=${rule_release_found}"
+  } >> "$GITHUB_OUTPUT"
+fi
