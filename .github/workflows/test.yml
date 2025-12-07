@@ -234,8 +234,5 @@ HTML
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-on:
-  workflow_dispatch:
-    inputs:
       lob:
         type: choice
