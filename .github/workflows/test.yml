@@ -233,6 +233,3 @@ HTML
               echo "_No matching releases found._"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
-
-      lob:
-        type: choice
