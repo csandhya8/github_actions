@@ -120,13 +120,6 @@ jobs:
           echo "targetlob: ${{ github.event.inputs.targetlob }}"
           echo "rule_package_name: ${{ github.event.inputs.rule_package_name }}"
 
-      - name: Ensure jq is available
-        shell: bash
-        run: |
-          if ! command -v jq >/dev/null 2>&1; then
-            echo "jq not found; installing..."
-            sudo apt-get update -y
-
       - name: Fetch releases from Artifactory (JSON list API)
         id: fetch
         env:
