@@ -109,8 +109,6 @@ jobs:
           fi
   deploy:
     name: Fetch releases & deploy
-    needs: [validate-inputs]
-    if: needs.validate-inputs.outputs.ok == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
