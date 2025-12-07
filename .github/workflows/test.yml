@@ -142,6 +142,55 @@ jobs:
           else
             echo "ERROR: RULE_PACKAGE_NAME must end with .rt or .hotfix" >&2
             exit 2
+
+          # Validate JFrog token
+          if [[ -z "${JFROG_ACCESS_TOKEN:-}" ]]; then
+            echo "ERROR: Missing JFROG_ACCESS_TOKEN secret" >&2
+            exit 3
+          fi
+                   # Fetch from Artifactory
+          http_code=$(curl -sS \
+            -H "Authorization: Bearer ${JFROG_ACCESS_TOKEN}" \
+            -o response.json \
+            -w "%{http_code}" \
+            "${artifactoryURL}")
+
+          if [[ "${http_code}" -lt 200 || "${http_code}" -ge 300 ]]; then
+            echo "ERROR: Artifactory request failed with HTTP ${http_code}" >&2
+            cat response.json >&2
+            exit 4
+          fi
+
+          # Parse response
+          mapfile -t all_paths < <(jq -r '.files[]?' response.json)
+          declare -a non_hotfix=()
+          declare -a hotfix=()
+
+          for p in "${all_paths[@]}"; do
+            fname="${p##*/}"
+            base="${fname%.zip}"
+            if [[ "${rulPackageType}" == "Normal" ]]; then
+              [[ "${base}" == *"_hotfix"* ]] && continue
+              non_hotfix+=("${base}")
+            else
+              [[ "${base}" == *"_hotfix"* ]] || continue
+              hotfix+=("${base}")
+            fi
+          done
+
+          # Sort and limit
+          sort_desc_take() {
+            local n="$1"; shift
+            if [[ "$#" -eq 0 ]]; then return 0; fi
+            printf '%s\n' "$@" | sort -V | tac | head -n "${n}"
+          }
+
+          latest_non_hotfix="$(sort_desc_take 20 "${non_hotfix[@]:-}")"
+          latest_hotfix="$(sort_desc_take 10 "${hotfix[@]:-}")"
+          combined="$(printf '%s\n%s\n' "${latest_non_hotfix}" "${latest_hotfix}" | awk 'NF')"
+          release_list="$(printf '%s\n' "${combined}" | paste -sd ',')"
+
+
           fi
 
          
