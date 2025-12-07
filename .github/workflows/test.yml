@@ -192,5 +192,44 @@ jobs:
 
 
           fi
+                    # Build HTML
+          select_html=$(cat <<'HTML'
+<html><head><style>
+#customers2 {font-family: 'Trebuchet MS', Arial, Helvetica, sans-serif;border-collapse: collapse;width: 100%;}
+#customers2 caption {display: table-caption;text-align: center;color: BLACK;}
+#customers2 td, #customers2 th {border: 1px solid #ddd;padding: 8px;}
+#customers2 th {padding-top: 12px;padding-bottom: 12px;text-align: left;background-color: #ffffe0;color: black;}
+</style></head><body><p>
+<table id='customers2'><tr><th>Item</th><th>[User Input 3 - Mandatory]</th></tr>
+HTML
+)
+          select_html+=$(printf "<tr><td>Select Rule Release Name for <b>[%s]</b> Deployment</td>" "${keyEnv}")
+          select_html+="<td><select name='value'><option value='NA'>=======Select Release Name=======</option>"
+          while IFS= read -r name; do
+            select_html+=$(printf "<option value='%s'>%s</option>" "${name}" "${name}")
+          done <<< "${combined}"
+          select_html+="</select></td></tr></table></body><p></html>"
 
-         
+          rule_release_found="NO"
+          [[ -n "${combined}" ]] && rule_release_found="YES"
+
+          # Outputs
+          echo "release_list=${release_list}" >> "$GITHUB_OUTPUT"
+          printf "select_html<<EOF\n%s\nEOF\n" "${select_html}" >> "$GITHUB_OUTPUT"
+          echo "rule_release_found=${rule_release_found}" >> "$GITHUB_OUTPUT"
+
+          # Summary
+          {
+            echo "### Rule releases for \`${RULE_PACKAGE_NAME}\` in \`${keyEnv}\`"
+            echo
+            echo "**Found:** ${rule_release_found}"
+            echo
+            echo "**List:**"
+            if [[ -n "${release_list}" ]]; then
+              echo
+              printf '%s\n' "${combined}" | sed 's/^/- /'
+            else
+              echo
+              echo "_No matching releases found._"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
