@@ -134,7 +134,7 @@ jobs:
         env:
           RULE_PACKAGE_NAME: ${{ github.event.inputs.rule_package_name }}
           TARGET_LOB: ${{ github.event.inputs.targetlob }}
-          ARTIFACTORY_URL: https://trial7091u2.jfrog.io/artifactory/test/demos/20005050151/demo_rt_v1.1.0.zip
+          ARTIFACTORY_URL: https://trial7091u2.jfrog.io/artifactory/test/demos/20005050151/
           JFROG_ACCESS_TOKEN: ${{ secrets.JFROG_ACCESS_TOKEN }}
         shell: bash
         run: |
@@ -172,7 +172,6 @@ jobs:
           if [[ "${http_code}" -lt 200 || "${http_code}" -ge 300 ]]; then
             echo "ERROR: Artifactory request failed with HTTP ${http_code}" >&2
             echo "Response body:" >&2
-            cat response.json
             cat response.json >&2 || true
             exit 4
           fi
