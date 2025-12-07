@@ -20,6 +20,12 @@ on:
           - CMOPTAccountTypeCallReason
           - CMOPTITSS
 
+      Server1:
+        type: boolean
+        description: server1
+        required: false
+        default: false
+
       rule_package_name:
         type: choice
         description: Rule package name
@@ -67,6 +73,7 @@ on:
           - cmuhcpacrouting.inbound.rt.hotfix
           - cmuhcrepeatcaller.inbound.rt.hotfix
           - cmuhcvision.inbound.rt.hotfix
+   
 
 jobs:
   validate-inputs:
