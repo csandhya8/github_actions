@@ -23,8 +23,8 @@ on:
       Server1:
         type: boolean
         description: server1
-        required: false
-        default: false
+        required: true
+        default: true
 
       rule_package_name:
         type: choice
