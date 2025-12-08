@@ -22,7 +22,7 @@ on:
 
       cl1-qa-rhel-elr-cm-gre-rte-002.uhc.com:
         type: boolean
-        description: cl1-qa-rhel-elr-cm-gre-rte-002.uhc.com
+        description: GRE-SERVER
         required: true
         default: true
         
