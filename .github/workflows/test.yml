@@ -68,13 +68,6 @@ on:
           - cmuhcrepeatcaller.inbound.rt.hotfix
           - cmuhcvision.inbound.rt.hotfix
 
-            # Heading-like dummy input (just for visual grouping)
-      __HEADING__:
-        description: "=== Select target servers ==="
-        required: false
-        type: string
-        default: "Tick the checkboxes below"
-
       cl1-dev-rhel-elr-cm-gre-rte-002.uhc.com:
         description: "cl1-dev-rhel-elr-cm-gre-rte-002.uhc.com"
         required: true
