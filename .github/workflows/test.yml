@@ -20,9 +20,15 @@ on:
           - CMOPTAccountTypeCallReason
           - CMOPTITSS
 
-      Server1:
+      cl1-qa-rhel-elr-cm-gre-rte-002.uhc.com:
         type: boolean
-        description: server1
+        description: cl1-qa-rhel-elr-cm-gre-rte-002.uhc.com
+        required: true
+        default: true
+        
+      cl1-qa-rhel-ctc-cm-gre-rte-002.uhc.com:
+        type: boolean
+        description: cl1-qa-rhel-ctc-cm-gre-rte-002.uhc.com
         required: true
         default: true
 
