@@ -19,19 +19,7 @@ on:
           - CMRegressionTestApp
           - CMOPTAccountTypeCallReason
           - CMOPTITSS
-
-      cl1-qa-rhel-elr-cm-gre-rte-002.uhc.com:
-        type: boolean
-        description: GRE-SERVER
-        required: true
-        default: true
-        
-      cl1-qa-rhel-ctc-cm-gre-rte-002.uhc.com:
-        type: boolean
-        description: cl1-qa-rhel-ctc-cm-gre-rte-002.uhc.com
-        required: true
-        default: true
-
+          
       rule_package_name:
         type: choice
         description: Rule package name
@@ -79,6 +67,24 @@ on:
           - cmuhcpacrouting.inbound.rt.hotfix
           - cmuhcrepeatcaller.inbound.rt.hotfix
           - cmuhcvision.inbound.rt.hotfix
+
+            # Heading-like dummy input (just for visual grouping)
+      __HEADING__:
+        description: "=== Select target servers ==="
+        required: false
+        type: string
+        default: "Tick the checkboxes below"
+
+      cl1-dev-rhel-elr-cm-gre-rte-002.uhc.com:
+        description: "cl1-dev-rhel-elr-cm-gre-rte-002.uhc.com"
+        required: true
+        type: boolean
+        default: true
+      cl1-dev-rhel-ctc-cm-gre-rte-002.uhc.com:
+        description: "cl1-dev-rhel-ctc-cm-gre-rte-002.uhc.com""
+        required: true
+        type: boolean
+        default: false
    
 
 jobs:
