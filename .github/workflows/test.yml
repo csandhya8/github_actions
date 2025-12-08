@@ -74,7 +74,7 @@ on:
         type: boolean
         default: true
       cl1-dev-rhel-ctc-cm-gre-rte-002.uhc.com:
-        description: "cl1-dev-rhel-ctc-cm-gre-rte-002.uhc.com""
+        description: "cl1-dev-rhel-ctc-cm-gre-rte-002.uhc.com"
         required: true
         type: boolean
         default: false
