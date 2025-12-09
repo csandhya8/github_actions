@@ -59,16 +59,12 @@ on:
           - cmuhcrepeatcaller.inbound.rt.hotfix
           - cmuhcvision.inbound.rt.hotfix
 
-      cl1-dev-rhel-elr-cm-gre-rte-002.uhc.com:
-        description: "GRE-Server-Dev:cl1-dev-rhel-elr-cm-gre-rte-002.uhc.com"
+      commit_description:
+        description: 'commit description'
         required: true
-        type: boolean
-        default: true
-      cl1-dev-rhel-ctc-cm-gre-rte-002.uhc.com:
-        description: "GRE-Server-Dev:cl1-dev-rhel-ctc-cm-gre-rte-002.uhc.com"
-        required: true
-        type: boolean
-        default: true
+        default: 'Default text'
+        type: string
+
    
 
 jobs:
