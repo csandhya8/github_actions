@@ -88,13 +88,20 @@ jobs:
           echo "ENV: $ACTIVE_ENV"
           echo "JSON Config ID: $ACTIVE_JSON"
 
-      - name: Read Active Environment from config.json
+      - name: Read servers.json and Output Servers
         run: |
-          CONFIG_FILE="scripts/servers.json"
-          echo "ACTIVE_LOB=$ACTIVE_LOB" >> $GITHUB_ENV
-          echo "ACTIVE_ENV=$ACTIVE_ENV" >> $GITHUB_ENV
-          echo "ACTIVE env "$ACTIVE_ENV" '.[$env] | join(",")' $SERVER_FILE)          echo "ACTIVE_JSON=$ACTIVE_JSON" >> $GITHUB_ENV
-          echo "SERVERS=$SERVERS" >> $GITHUB_ENV
+          SERVER_FILE="scripts/servers.json"
+
+          echo "Selected Environment: $ACTIVE_ENV"
+          SERVERS=$(jq -r --arg env "$ACTIVE_ENV" '.[$env] | join(", ")' $SERVER_FILE)
+
+          if [ -n "$SERVERS" ]; then
+            echo "Servers for $ACTIVE_ENV: $SERVERS"
+            echo "SERVERS=$SERVERS" >> $GITHUB_ENV
+          else
+            echo "No servers found for $ACTIVE_ENV"
+            exit 1
+          fi
 
       - name: Print Config and Servers
         run: |
