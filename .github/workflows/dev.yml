@@ -75,95 +75,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Summary
-        shell: bash
+
+      - name: Generate LOB, ENV, and JSON values
         run: |
-          echo "lob: ${{ github.event.inputs.lob }}"
-          echo "targetlob: ${{ github.event.inputs.targetlob }}"
-          echo "rule_package_name: ${{ github.event.inputs.rule_package_name }}"
+          chmod +x ./scripts/generate_hidden_values.sh
+          ./scripts/generate_hidden_values.sh
 
-      - name: Fetch releases from Artifactory (JSON list API)
-        id: fetch
-        env:
-          ARTIFACTORY_BASE: https://trial7091u2.jfrog.io/artifactory
-          ARTIFACTORY_URL: https://trial7091u2.jfrog.io/artifactory/test/demos/20005050151/demo_rt_v1.1.0.zip
-          RULE_PACKAGE_NAME: ${{ github.event.inputs.rule_package_name }}
-          TARGET_LOB: ${{ github.event.inputs.targetlob }}
-          JFROG_ACCESS_TOKEN: ${{ secrets.JFROG_ACCESS_TOKEN }}
-        shell: bash
+          
+      - name: Print generated values
         run: |
-          set -euo pipefail
+          echo "LOB: $ACTIVE_LOB"
+          echo "ENV: $ACTIVE_ENV"
+          echo "JSON Config ID: $ACTIVE_JSON"
 
-          # ---- Derive rule type ----
-          if [[ "${RULE_PACKAGE_NAME}" == *.hotfix ]]; then
-            rulePackageType="HotFix"
-          elif [[ "${RULE_PACKAGE_NAME}" == *.rt ]]; then
-            rulePackageType="Normal"
-          else
-            echo "ERROR: RULE_PACKAGE_NAME must end with .rt or .hotfix" >&2
-            exit 2
-          fi
 
-          [[ -n "${JFROG_ACCESS_TOKEN:-}" ]] || { echo "ERROR: Missing JFROG_ACCESS_TOKEN" >&2; exit 3; }
+        
 
-          # ---- Convert the direct file URL into a File List API URL ----
-          # ARTIFACTORY_URL format: https://host/artifactory/<repo>/<dir...>/<filename>.zip
-          repo_and_path="${ARTIFACTORY_URL#${ARTIFACTORY_BASE}/}"     # <repo>/<dir...>/<filename>.zip
-          repo="${repo_and_path%%/*}"                                 # <repo>
-          dir_with_file="${repo_and_path#${repo}/}"                   # <dir...>/<filename>.zip
-          dir="${dir_with_file%/*}"                                   # <dir...>
-          list_url="${ARTIFACTORY_BASE}/api/storage/${repo}/${dir}?list&deep=1"
 
-          # ---- Call File List API (returns JSON) ----
-          http_code=$(curl -sS -L \
-            -H "Authorization: Bearer ${JFROG_ACCESS_TOKEN}" \
-            -H "Accept: application/json" \
-            -o response.json \
-            -w "%{http_code}" \
-            "${list_url}")
 
-          if [[ "${http_code}" -lt 200 || "${http_code}" -ge 300 ]]; then
-            echo "ERROR: Artifactory list request failed with HTTP ${http_code}" >&2
-            cat response.json >&2 || true
-            exit 4
-          fi
-
-          # ---- Parse: only .zip names from the directory ----
-          mapfile -t zip_names < <(jq -r '.files[]?.uri' response.json | sed 's|^/||' | grep -E '\.zip$' || true)
-
-          declare -a non_hotfix=()
-          declare -a hotfix=()
-          for name in "${zip_names[@]}"; do
-            base="${name%.zip}"
-            if [[ "${rulePackageType}" == "Normal" ]]; then
-              [[ "${base}" == *_hotfix ]] && continue
-              non_hotfix+=("${base}")
-            else
-              [[ "${base}" == *_hotfix ]] || continue
-              hotfix+=("${base}")
-            fi
-          done
-
-          # ---- Natural sort descending and cap list sizes ----
-          sort_desc_take () { local n="$1"; shift; [[ "$#" -eq 0 ]] && return 0; printf '%s\n' "$@" | sort -V | tac | head -n "${n}"; }
-          latest_non_hotfix="$(sort_desc_take 20 "${non_hotfix[@]:-}")"
-          latest_hotfix="$(sort_desc_take 10 "${hotfix[@]:-}")"
-
-          combined="$(printf '%s\n%s\n' "${latest_non_hotfix}" "${latest_hotfix}" | awk 'NF')"
-          release_list="$(printf '%s\n' "${combined}" | paste -sd ',' -)"
-          rule_release_found="NO"; [[ -n "${combined}" ]] && rule_release_found="YES"
-
-          echo "------------------------------------------------------------"
-          echo "Target LOB: ${TARGET_LOB}"
-          echo "Rule package type: ${rulePackageType}"
-          echo "List URL: ${list_url}"
-          echo "HTTP status: ${http_code}"
-          echo "rule_release_found=${rule_release_found}"
-          echo "release_list=${release_list}"
-          echo "------------------------------------------------------------"
-          [[ -n "${release_list}" ]] && printf '%s\n' "${combined}"
-
-          {
-            echo "release_list=${release_list}"
-            echo "rule_release_found=${rule_release_found}"
-          } >> "$GITHUB_OUTPUT"
