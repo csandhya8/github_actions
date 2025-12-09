@@ -1,0 +1,188 @@
+name: Deploy
+on:
+  workflow_dispatch:
+    inputs:
+      targetlob:
+        type: choice
+        description: Target LOB to deploy
+        required: true
+        options:
+          - CMRegressionTestApp
+          - CMOPTAccountTypeCallReason
+          - CMOPTITSS
+			    - CMUHCCSEligibility
+			    - CMUHCCSRouting
+			    - CMUHCCallerIntent
+			    - CMUHCCrossChannel
+			    - CMUHCDental
+			    - CMUHCEIClaimsDenial
+			    - CMUHCEIFastPass
+			    - CMUHCEIPrime
+			    - CMUHCEIRouting
+			    - CMUHCEISpecialtyIVR
+			    - CMUH-CMRProviderRestriction
+			    - CMUH-CMRRouting
+			    - CMUHCPACRouting
+			    - CMUHCRepeatCaller
+			    - CMUHCVision
+                
+      rule_package_name:
+        type: choice
+        description: Rule package name
+        required: true
+        options:
+          - cmoptaccounttypecallreason.inbound.rt
+          - cmoptitss.inbound.rt
+          - cmoptrxspecialitycampaignname.inbound.rt
+          - cmoptrxspecialityclientname.inbound.rt
+          - cmoptrxspecialitytherapycode.inbound.rt
+          - cmregressiontestapp.inbound.rt
+          - cmuhccallerintent.inbound.rt
+          - cmuhccrosschannel.inbound.rt
+          - cmuhccseligibility.inbound.rt
+          - cmuhccsrouting.inbound.rt
+          - cmuhcdental.inbound.rt
+          - cmuhceiclaimsdenial.inbound.rt
+          - cmuhceifastpass.inbound.rt
+          - cmuhceiprime.inbound.rt
+          - cmuhceirouting.inbound.rt
+          - cmuhceispecialtyivr.inbound.rt
+          - cmuhcmrproviderrestriction.inbound.rt
+          - cmuhcmrrouting.inbound.rt
+          - cmuhcpacrouting.inbound.rt
+          - cmuhcrepeatcaller.inbound.rt
+          - cmuhcvision.inbound.rt
+          - cmoptaccounttypecallreason.inbound.rt.hotfix
+          - cmoptitss.inbound.rt.hotfix
+          - cmoptrxspecialitycampaignname.inbound.rt.hotfix
+          - cmoptrxspecialityclientname.inbound.rt.hotfix
+          - cmoptrxspecialitytherapycode.inbound.rt.hotfix
+          - cmregressiontestapp.inbound.rt.hotfix
+          - cmuhccallerintent.inbound.rt.hotfix
+          - cmuhccrosschannel.inbound.rt.hotfix
+          - cmuhccseligibility.inbound.rt.hotfix
+          - cmuhccsrouting.inbound.rt.hotfix
+          - cmuhcdental.inbound.rt.hotfix
+          - cmuhceiclaimsdenial.inbound.rt.hotfix
+          - cmuhceifastpass.inbound.rt.hotfix
+          - cmuhceiprime.inbound.rt.hotfix
+          - cmuhceirouting.inbound.rt.hotfix
+          - cmuhceispecialtyivr.inbound.rt.hotfix
+          - cmuhcmrproviderrestriction.inbound.rt.hotfix
+          - cmuhcmrrouting.inbound.rt.hotfix
+          - cmuhcpacrouting.inbound.rt.hotfix
+          - cmuhcrepeatcaller.inbound.rt.hotfix
+          - cmuhcvision.inbound.rt.hotfix
+
+      cl1-dev-rhel-elr-cm-gre-rte-002.uhc.com:
+        description: "GRE-Server-Dev:cl1-dev-rhel-elr-cm-gre-rte-002.uhc.com"
+        required: true
+        type: boolean
+        default: true
+      cl1-dev-rhel-ctc-cm-gre-rte-002.uhc.com:
+        description: "GRE-Server-Dev:cl1-dev-rhel-ctc-cm-gre-rte-002.uhc.com"
+        required: true
+        type: boolean
+        default: true
+   
+
+jobs:
+  deploy:
+    name: Fetch releases & deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Summary
+        shell: bash
+        run: |
+          echo "lob: ${{ github.event.inputs.lob }}"
+          echo "targetlob: ${{ github.event.inputs.targetlob }}"
+          echo "rule_package_name: ${{ github.event.inputs.rule_package_name }}"
+
+      - name: Fetch releases from Artifactory (JSON list API)
+        id: fetch
+        env:
+          ARTIFACTORY_BASE: https://trial7091u2.jfrog.io/artifactory
+          ARTIFACTORY_URL: https://trial7091u2.jfrog.io/artifactory/test/demos/20005050151/demo_rt_v1.1.0.zip
+          RULE_PACKAGE_NAME: ${{ github.event.inputs.rule_package_name }}
+          TARGET_LOB: ${{ github.event.inputs.targetlob }}
+          JFROG_ACCESS_TOKEN: ${{ secrets.JFROG_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # ---- Derive rule type ----
+          if [[ "${RULE_PACKAGE_NAME}" == *.hotfix ]]; then
+            rulePackageType="HotFix"
+          elif [[ "${RULE_PACKAGE_NAME}" == *.rt ]]; then
+            rulePackageType="Normal"
+          else
+            echo "ERROR: RULE_PACKAGE_NAME must end with .rt or .hotfix" >&2
+            exit 2
+          fi
+
+          [[ -n "${JFROG_ACCESS_TOKEN:-}" ]] || { echo "ERROR: Missing JFROG_ACCESS_TOKEN" >&2; exit 3; }
+
+          # ---- Convert the direct file URL into a File List API URL ----
+          # ARTIFACTORY_URL format: https://host/artifactory/<repo>/<dir...>/<filename>.zip
+          repo_and_path="${ARTIFACTORY_URL#${ARTIFACTORY_BASE}/}"     # <repo>/<dir...>/<filename>.zip
+          repo="${repo_and_path%%/*}"                                 # <repo>
+          dir_with_file="${repo_and_path#${repo}/}"                   # <dir...>/<filename>.zip
+          dir="${dir_with_file%/*}"                                   # <dir...>
+          list_url="${ARTIFACTORY_BASE}/api/storage/${repo}/${dir}?list&deep=1"
+
+          # ---- Call File List API (returns JSON) ----
+          http_code=$(curl -sS -L \
+            -H "Authorization: Bearer ${JFROG_ACCESS_TOKEN}" \
+            -H "Accept: application/json" \
+            -o response.json \
+            -w "%{http_code}" \
+            "${list_url}")
+
+          if [[ "${http_code}" -lt 200 || "${http_code}" -ge 300 ]]; then
+            echo "ERROR: Artifactory list request failed with HTTP ${http_code}" >&2
+            cat response.json >&2 || true
+            exit 4
+          fi
+
+          # ---- Parse: only .zip names from the directory ----
+          mapfile -t zip_names < <(jq -r '.files[]?.uri' response.json | sed 's|^/||' | grep -E '\.zip$' || true)
+
+          declare -a non_hotfix=()
+          declare -a hotfix=()
+          for name in "${zip_names[@]}"; do
+            base="${name%.zip}"
+            if [[ "${rulePackageType}" == "Normal" ]]; then
+              [[ "${base}" == *_hotfix ]] && continue
+              non_hotfix+=("${base}")
+            else
+              [[ "${base}" == *_hotfix ]] || continue
+              hotfix+=("${base}")
+            fi
+          done
+
+          # ---- Natural sort descending and cap list sizes ----
+          sort_desc_take () { local n="$1"; shift; [[ "$#" -eq 0 ]] && return 0; printf '%s\n' "$@" | sort -V | tac | head -n "${n}"; }
+          latest_non_hotfix="$(sort_desc_take 20 "${non_hotfix[@]:-}")"
+          latest_hotfix="$(sort_desc_take 10 "${hotfix[@]:-}")"
+
+          combined="$(printf '%s\n%s\n' "${latest_non_hotfix}" "${latest_hotfix}" | awk 'NF')"
+          release_list="$(printf '%s\n' "${combined}" | paste -sd ',' -)"
+          rule_release_found="NO"; [[ -n "${combined}" ]] && rule_release_found="YES"
+
+          echo "------------------------------------------------------------"
+          echo "Target LOB: ${TARGET_LOB}"
+          echo "Rule package type: ${rulePackageType}"
+          echo "List URL: ${list_url}"
+          echo "HTTP status: ${http_code}"
+          echo "rule_release_found=${rule_release_found}"
+          echo "release_list=${release_list}"
+          echo "------------------------------------------------------------"
+          [[ -n "${release_list}" ]] && printf '%s\n' "${combined}"
+
+          {
+            echo "release_list=${release_list}"
+            echo "rule_release_found=${rule_release_found}"
+          } >> "$GITHUB_OUTPUT"
