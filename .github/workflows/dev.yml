@@ -88,6 +88,21 @@ jobs:
           echo "ENV: $ACTIVE_ENV"
           echo "JSON Config ID: $ACTIVE_JSON"
 
+      - name: Read Active Environment from config.json
+        run: |
+          CONFIG_FILE="scripts/servers.json"
+          echo "ACTIVE_LOB=$ACTIVE_LOB" >> $GITHUB_ENV
+          echo "ACTIVE_ENV=$ACTIVE_ENV" >> $GITHUB_ENV
+          echo "ACTIVE env "$ACTIVE_ENV" '.[$env] | join(",")' $SERVER_FILE)          echo "ACTIVE_JSON=$ACTIVE_JSON" >> $GITHUB_ENV
+          echo "SERVERS=$SERVERS" >> $GITHUB_ENV
+
+      - name: Print Config and Servers
+        run: |
+          echo "LOB: $ACTIVE_LOB"
+          echo "ENV: $ACTIVE_ENV"
+          echo "JSON ID: $ACTIVE_JSON"
+          echo "Servers: $SERVERS"
+
 
         
 
