@@ -10,21 +10,21 @@ on:
           - CMRegressionTestApp
           - CMOPTAccountTypeCallReason
           - CMOPTITSS
-			    - CMUHCCSEligibility
-			    - CMUHCCSRouting
-			    - CMUHCCallerIntent
-			    - CMUHCCrossChannel
-			    - CMUHCDental
-			    - CMUHCEIClaimsDenial
-			    - CMUHCEIFastPass
-			    - CMUHCEIPrime
-			    - CMUHCEIRouting
-			    - CMUHCEISpecialtyIVR
-			    - CMUH-CMRProviderRestriction
-			    - CMUH-CMRRouting
-			    - CMUHCPACRouting
-			    - CMUHCRepeatCaller
-			    - CMUHCVision
+		  - CMUHCCSEligibility
+	      - CMUHCCSRouting
+	      - CMUHCCallerIntent
+	      - CMUHCCrossChannel
+		  - CMUHCDental
+		  - CMUHCEIClaimsDenial
+		  - CMUHCEIFastPass
+		  - CMUHCEIPrime
+		  - CMUHCEIRouting
+	      - CMUHCEISpecialtyIVR
+	      - CMUH-CMRProviderRestriction
+	      - CMUH-CMRRouting
+		  - CMUHCPACRouting
+		  - CMUHCRepeatCaller
+		  - CMUHCVision
                 
       rule_package_name:
         type: choice
