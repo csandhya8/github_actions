@@ -1,0 +1,6 @@
+{
+  "DEV2": ["dev-server1", "dev-server2"],
+  "QA": ["qa-server1", "qa-server2"],
+  "STAGE": ["stage-server1", "stage-server2"],
+  "PROD": ["prod-server1", "prod-server2", "prod-server3"]
+}
